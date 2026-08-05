@@ -5,13 +5,12 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { LighterPackClient } from '@paladini/lighterpack';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../../src/config.js';
-import { LighterPackClient } from '../../src/lighterpack/client.js';
-import { SyncEngine } from '../../src/lighterpack/sync-engine.js';
 import { registerAllTools } from '../../src/tools/index.js';
 
 function loadDotEnvIfPresent(): void {
@@ -47,11 +46,10 @@ describe.skipIf(process.env.RUN_INTEGRATION !== '1')('LighterPack live integrati
 
   beforeAll(async () => {
     const config = loadConfig();
-    const lpClient = new LighterPackClient({ baseUrl: config.baseUrl });
-    const engine = new SyncEngine({ client: lpClient, username: config.username, password: config.password });
+    const lp = new LighterPackClient({ username: config.username, password: config.password, baseUrl: config.baseUrl });
 
     server = new McpServer({ name: 'lighterpack-mcp-integration', version: '0.0.0' });
-    registerAllTools(server, engine);
+    registerAllTools(server, lp);
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     client = new Client({ name: 'integration-test-client', version: '0.0.0' });

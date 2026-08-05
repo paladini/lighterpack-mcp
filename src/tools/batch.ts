@@ -1,22 +1,7 @@
+import type { LighterPackClient } from '@paladini/lighterpack';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { formatItem, formatListDetail, runTool } from '../formatting/responses.js';
-import { ValidationError } from '../lighterpack/errors.js';
-import {
-  addCategory,
-  addItemToCategory,
-  createList,
-  getCategory,
-  getItem,
-  setItemConsumable,
-  setItemQuantity,
-  setItemStar,
-  setItemWorn,
-  updateItem,
-} from '../lighterpack/mutations.js';
-import type { SyncEngine } from '../lighterpack/sync-engine.js';
-import type { WeightUnit } from '../lighterpack/weight.js';
-import { weightToMg } from '../lighterpack/weight.js';
+import { runTool } from '../formatting/responses.js';
 import { hexColorSchema, starSchema, weightUnitSchema } from './schemas.js';
 
 const itemInputSchema = z.object({
@@ -34,26 +19,7 @@ const itemInputSchema = z.object({
   star: starSchema.optional(),
 });
 
-type ItemInput = z.infer<typeof itemInputSchema>;
-
-function toNewItemFields(input: ItemInput) {
-  return {
-    existingItemId: input.existingItemId,
-    name: input.name,
-    description: input.description,
-    weightMg: input.weight !== undefined ? weightToMg(input.weight, input.weightUnit) : undefined,
-    authorUnit: input.weightUnit,
-    price: input.price,
-    url: input.url,
-    imageUrl: input.imageUrl,
-    qty: input.qty,
-    worn: input.worn,
-    consumable: input.consumable,
-    star: input.star,
-  };
-}
-
-export function registerBatchTools(server: McpServer, engine: SyncEngine): void {
+export function registerBatchTools(server: McpServer, lp: LighterPackClient): void {
   server.registerTool(
     'add_items_batch',
     {
@@ -61,15 +27,7 @@ export function registerBatchTools(server: McpServer, engine: SyncEngine): void 
       description: 'Adds several items to one category in a single save round-trip — much more efficient than calling add_item_to_category repeatedly.',
       inputSchema: { categoryId: z.number().int(), items: z.array(itemInputSchema).min(1) },
     },
-    async ({ categoryId, items }) =>
-      runTool(async () =>
-        engine.mutate((lib) =>
-          items.map((input) => {
-            const { item, categoryItem } = addItemToCategory(lib, categoryId, toNewItemFields(input));
-            return formatItem(item, categoryItem);
-          }),
-        ),
-      ),
+    async ({ categoryId, items }) => runTool(async () => lp.batch.addItems(categoryId, items)),
   );
 
   server.registerTool(
@@ -92,18 +50,7 @@ export function registerBatchTools(server: McpServer, engine: SyncEngine): void 
       },
     },
     async ({ name, description, categories }) =>
-      runTool(async () =>
-        engine.mutate((lib) => {
-          const list = createList(lib, { name, description });
-          for (const categoryInput of categories) {
-            const category = addCategory(lib, list.id, { name: categoryInput.name, color: categoryInput.color });
-            for (const itemInput of categoryInput.items) {
-              addItemToCategory(lib, category.id, toNewItemFields(itemInput));
-            }
-          }
-          return formatListDetail(lib, list);
-        }),
-      ),
+      runTool(async () => lp.batch.createListWithItems({ name, description, categories })),
   );
 
   const batchUpdateEntrySchema = z.object({
@@ -137,40 +84,6 @@ export function registerBatchTools(server: McpServer, engine: SyncEngine): void 
       description: 'Applies field edits (name/description/price/weight/url/imageUrl) and/or flag edits (qty/worn/consumable/star) across many items in a single save round-trip.',
       inputSchema: { updates: z.array(batchUpdateEntrySchema).min(1) },
     },
-    async ({ updates }) =>
-      runTool(async () =>
-        engine.mutate((lib) =>
-          updates.map((update) => {
-            if (update.fields) {
-              if (update.fields.weight !== undefined && update.fields.weightUnit === undefined) {
-                throw new ValidationError(`weightUnit is required alongside weight for item ${update.itemId}.`);
-              }
-              updateItem(lib, update.itemId, {
-                name: update.fields.name,
-                description: update.fields.description,
-                price: update.fields.price,
-                weightMg: update.fields.weight !== undefined ? weightToMg(update.fields.weight, update.fields.weightUnit as WeightUnit) : undefined,
-                authorUnit: update.fields.weightUnit,
-                url: update.fields.url,
-                imageUrl: update.fields.imageUrl,
-              });
-            }
-            if (update.flags) {
-              if (update.categoryId === undefined) {
-                throw new ValidationError(`categoryId is required to update flags for item ${update.itemId}.`);
-              }
-              if (update.flags.qty !== undefined) setItemQuantity(lib, update.categoryId, update.itemId, update.flags.qty);
-              if (update.flags.worn !== undefined) setItemWorn(lib, update.categoryId, update.itemId, update.flags.worn);
-              if (update.flags.consumable !== undefined) setItemConsumable(lib, update.categoryId, update.itemId, update.flags.consumable);
-              if (update.flags.star !== undefined) setItemStar(lib, update.categoryId, update.itemId, update.flags.star);
-            }
-            const categoryItem =
-              update.categoryId !== undefined
-                ? getCategory(lib, update.categoryId).categoryItems.find((ci) => ci.itemId === update.itemId)
-                : undefined;
-            return formatItem(getItem(lib, update.itemId), categoryItem);
-          }),
-        ),
-      ),
+    async ({ updates }) => runTool(async () => lp.batch.updateItems(updates)),
   );
 }

@@ -17,7 +17,7 @@ An [MCP](https://modelcontextprotocol.io) server that lets AI agents create and 
 Requires Node.js ≥20 and a [LighterPack](https://lighterpack.com) account.
 
 ```bash
-npx lighterpack-mcp
+npx @paladini/lighterpack-mcp
 ```
 
 Add it to your MCP client's config (example for Claude Desktop, `claude_desktop_config.json`):
@@ -27,7 +27,7 @@ Add it to your MCP client's config (example for Claude Desktop, `claude_desktop_
   "mcpServers": {
     "lighterpack": {
       "command": "npx",
-      "args": ["-y", "lighterpack-mcp"],
+      "args": ["-y", "@paladini/lighterpack-mcp"],
       "env": {
         "LIGHTERPACK_USERNAME": "your-username",
         "LIGHTERPACK_PASSWORD": "your-password"
@@ -119,7 +119,7 @@ Deliberately out of scope: account registration/deletion, password/email changes
 
 ## Architecture
 
-LighterPack has no granular REST API — there's no "create list" or "add item" endpoint. Instead, a user's entire library (every list, category, and item) is a single JSON document, synced via `POST /saveLibrary` with an optimistic-concurrency token (`sync_token`). This server's [`SyncEngine`](src/lighterpack/sync-engine.ts) is the one place that fetch → mutate → save cycle is implemented: every tool call runs a small mutation against a cached, cloned copy of the library and persists it, retrying once if another writer (e.g. your browser tab) saved in between. See [`mutations.ts`](src/lighterpack/mutations.ts) for the business rules (worn/consumable exclusivity, id sequencing, shared items, etc.), ported from LighterPack's own [open-source client](https://github.com/galenmaly/lighterpack).
+LighterPack has no granular REST API — there's no "create list" or "add item" endpoint. Instead, a user's entire library (every list, category, and item) is a single JSON document, synced via `POST /saveLibrary` with an optimistic-concurrency token (`sync_token`). That fetch → mutate → save cycle, the sync_token retry logic, and the business rules (worn/consumable exclusivity, id sequencing, shared items, etc. — ported from LighterPack's own [open-source client](https://github.com/galenmaly/lighterpack)) all live in [`@paladini/lighterpack`](https://github.com/paladini/lighterpack-sdk), a standalone TypeScript SDK this server depends on. This repo is intentionally thin: `src/tools/*` just registers each MCP tool (Zod input schema + agent-facing description) and calls the corresponding SDK method (`lp.lists.*`, `lp.categories.*`, `lp.items.*`, `lp.batch.*`), returning the SDK's already-formatted view objects (weights in grams, computed totals, etc.) as the tool result.
 
 ## Limitations
 

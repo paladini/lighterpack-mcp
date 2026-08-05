@@ -1,11 +1,10 @@
+import type { LighterPackClient } from '@paladini/lighterpack';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { formatCategory, runTool } from '../formatting/responses.js';
-import { addCategory, getList, removeCategory, renameCategory, reorderCategories, setCategoryColor } from '../lighterpack/mutations.js';
-import type { SyncEngine } from '../lighterpack/sync-engine.js';
+import { runTool } from '../formatting/responses.js';
 import { hexColorSchema } from './schemas.js';
 
-export function registerCategoryTools(server: McpServer, engine: SyncEngine): void {
+export function registerCategoryTools(server: McpServer, lp: LighterPackClient): void {
   server.registerTool(
     'add_category',
     {
@@ -16,13 +15,7 @@ export function registerCategoryTools(server: McpServer, engine: SyncEngine): vo
         color: hexColorSchema.optional(),
       },
     },
-    async ({ listId, name, color }) =>
-      runTool(async () =>
-        engine.mutate((lib) => {
-          const category = addCategory(lib, listId, { name, color });
-          return formatCategory(lib, category, getList(lib, listId).optionalFields);
-        }),
-      ),
+    async ({ listId, name, color }) => runTool(async () => lp.categories.add(listId, { name, color })),
   );
 
   server.registerTool(
@@ -32,12 +25,10 @@ export function registerCategoryTools(server: McpServer, engine: SyncEngine): vo
       inputSchema: { categoryId: z.number().int(), name: z.string() },
     },
     async ({ categoryId, name }) =>
-      runTool(async () =>
-        engine.mutate((lib) => {
-          renameCategory(lib, categoryId, name);
-          return { categoryId, name };
-        }),
-      ),
+      runTool(async () => {
+        await lp.categories.rename(categoryId, name);
+        return { categoryId, name };
+      }),
   );
 
   server.registerTool(
@@ -48,12 +39,10 @@ export function registerCategoryTools(server: McpServer, engine: SyncEngine): vo
       inputSchema: { categoryId: z.number().int(), color: hexColorSchema.optional() },
     },
     async ({ categoryId, color }) =>
-      runTool(async () =>
-        engine.mutate((lib) => {
-          setCategoryColor(lib, categoryId, color);
-          return { categoryId, color: color ?? null };
-        }),
-      ),
+      runTool(async () => {
+        await lp.categories.setColor(categoryId, color);
+        return { categoryId, color: color ?? null };
+      }),
   );
 
   server.registerTool(
@@ -65,7 +54,7 @@ export function registerCategoryTools(server: McpServer, engine: SyncEngine): vo
     },
     async ({ listId, categoryId, force }) =>
       runTool(async () => {
-        await engine.mutate((lib) => removeCategory(lib, listId, categoryId, force));
+        await lp.categories.remove(listId, categoryId, force);
         return { message: `Category ${categoryId} removed from list ${listId}.` };
       }),
   );
@@ -79,7 +68,7 @@ export function registerCategoryTools(server: McpServer, engine: SyncEngine): vo
     },
     async ({ listId, categoryIds }) =>
       runTool(async () => {
-        await engine.mutate((lib) => reorderCategories(lib, listId, categoryIds));
+        await lp.categories.reorder(listId, categoryIds);
         return { listId, categoryIds };
       }),
   );

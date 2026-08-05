@@ -1,20 +1,10 @@
+import type { LighterPackClient } from '@paladini/lighterpack';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { formatListDetail, formatListSummary, runTool } from '../formatting/responses.js';
-import {
-  copyList,
-  createList,
-  deleteList,
-  getList,
-  renameList,
-  setListDescription,
-  setListExternalId,
-  setListOptionalFields,
-} from '../lighterpack/mutations.js';
-import type { SyncEngine } from '../lighterpack/sync-engine.js';
+import { runTool } from '../formatting/responses.js';
 import { listOptionalFieldsPatchSchema } from './schemas.js';
 
-export function registerListTools(server: McpServer, engine: SyncEngine): void {
+export function registerListTools(server: McpServer, lp: LighterPackClient): void {
   server.registerTool(
     'create_list',
     {
@@ -25,8 +15,7 @@ export function registerListTools(server: McpServer, engine: SyncEngine): void {
         description: z.string().default(''),
       },
     },
-    async ({ name, description }) =>
-      runTool(async () => engine.mutate((lib) => formatListSummary(lib, createList(lib, { name, description })))),
+    async ({ name, description }) => runTool(async () => lp.lists.create({ name, description })),
   );
 
   server.registerTool(
@@ -36,7 +25,7 @@ export function registerListTools(server: McpServer, engine: SyncEngine): void {
       description: 'Returns a summary (name, category count, total weight/price) of every packing list in the account.',
       inputSchema: {},
     },
-    async () => runTool(async () => engine.read((lib) => lib.lists.map((list) => formatListSummary(lib, list)))),
+    async () => runTool(async () => lp.lists.list()),
   );
 
   server.registerTool(
@@ -46,7 +35,7 @@ export function registerListTools(server: McpServer, engine: SyncEngine): void {
       description: 'Returns full detail for one packing list: every category, every item (with weight, price, qty, worn/consumable/star flags), and computed totals.',
       inputSchema: { listId: z.number().int() },
     },
-    async ({ listId }) => runTool(async () => engine.read((lib) => formatListDetail(lib, getList(lib, listId)))),
+    async ({ listId }) => runTool(async () => lp.lists.get(listId)),
   );
 
   server.registerTool(
@@ -55,8 +44,7 @@ export function registerListTools(server: McpServer, engine: SyncEngine): void {
       title: 'Rename a packing list',
       inputSchema: { listId: z.number().int(), name: z.string() },
     },
-    async ({ listId, name }) =>
-      runTool(async () => engine.mutate((lib) => formatListSummary(lib, renameList(lib, listId, name)))),
+    async ({ listId, name }) => runTool(async () => lp.lists.rename(listId, name)),
   );
 
   server.registerTool(
@@ -65,8 +53,7 @@ export function registerListTools(server: McpServer, engine: SyncEngine): void {
       title: 'Set a packing list description',
       inputSchema: { listId: z.number().int(), description: z.string() },
     },
-    async ({ listId, description }) =>
-      runTool(async () => engine.mutate((lib) => formatListSummary(lib, setListDescription(lib, listId, description)))),
+    async ({ listId, description }) => runTool(async () => lp.lists.setDescription(listId, description)),
   );
 
   server.registerTool(
@@ -76,8 +63,7 @@ export function registerListTools(server: McpServer, engine: SyncEngine): void {
       description: 'Toggles which optional columns show for a list: item images, prices, worn, consumable, list description, and total pack weight. Only the keys you pass are changed.',
       inputSchema: { listId: z.number().int(), fields: listOptionalFieldsPatchSchema },
     },
-    async ({ listId, fields }) =>
-      runTool(async () => engine.mutate((lib) => formatListSummary(lib, setListOptionalFields(lib, listId, fields)))),
+    async ({ listId, fields }) => runTool(async () => lp.lists.setOptionalFields(listId, fields)),
   );
 
   server.registerTool(
@@ -87,8 +73,7 @@ export function registerListTools(server: McpServer, engine: SyncEngine): void {
       description: 'Duplicates a list and its categories. The copy references the SAME item rows as the original (shared items — editing one updates both); use fork_item afterwards to detach a specific item.',
       inputSchema: { listId: z.number().int(), newName: z.string().optional() },
     },
-    async ({ listId, newName }) =>
-      runTool(async () => engine.mutate((lib) => formatListSummary(lib, copyList(lib, listId, newName)))),
+    async ({ listId, newName }) => runTool(async () => lp.lists.copy(listId, newName)),
   );
 
   server.registerTool(
@@ -100,7 +85,7 @@ export function registerListTools(server: McpServer, engine: SyncEngine): void {
     },
     async ({ listId }) =>
       runTool(async () => {
-        await engine.mutate((lib) => deleteList(lib, listId));
+        await lp.lists.delete(listId);
         return { message: `List ${listId} deleted.` };
       }),
   );
@@ -114,9 +99,8 @@ export function registerListTools(server: McpServer, engine: SyncEngine): void {
     },
     async ({ listId }) =>
       runTool(async () => {
-        const slug = await engine.mintShareSlug();
-        await engine.mutate((lib) => setListExternalId(lib, listId, slug));
-        return { shareUrl: `https://lighterpack.com/r/${slug}` };
+        const shareUrl = await lp.lists.generateShareLink(listId);
+        return { shareUrl };
       }),
   );
 }

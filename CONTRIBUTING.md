@@ -27,18 +27,17 @@ Useful scripts:
 
 Two tiers:
 
-- **Unit tests** (`tests/unit/`) never touch the network. `mutations.ts` is tested against in-memory fixtures; `client.ts` and `sync-engine.ts` are tested with a mocked HTTP layer / mocked client; the `tools/*` suite spins up a real `McpServer` + `Client` over an in-memory transport pair and drives every tool through the actual MCP protocol.
+- **Unit tests** (`tests/unit/`) never touch the network. The `tools/*` suite spins up a real `McpServer` + `Client` over an in-memory transport pair and drives every tool through the actual MCP protocol, using a `LighterPackClient` from `@paladini/lighterpack` wired to a fake in-memory `fetchImpl` instead of the real network. (The business rules and sync logic themselves — `mutations.ts`, `client.ts`, `sync-engine.ts` — live in and are tested by the [`lighterpack-sdk`](https://github.com/paladini/lighterpack-sdk) repo, not here.)
 - **Integration test** (`tests/integration/live-smoke.test.ts`) hits the real LighterPack API end-to-end (create → edit → share → delete). It's skipped by default and gated behind `RUN_INTEGRATION=1` plus real `LIGHTERPACK_USERNAME`/`LIGHTERPACK_PASSWORD` — run `npm run verify-live-login` first if you don't have a disposable test account handy. It is **not** part of CI (no credentials are stored in this repo).
 
 ## How to add a new tool
 
-1. Add the pure business logic to [`src/lighterpack/mutations.ts`](src/lighterpack/mutations.ts) (or extend an existing function) — this is the single source of truth for what's a valid mutation. Add a unit test in `tests/unit/mutations.test.ts` covering the new behavior, including any edge cases (invalid input, not-found ids, business-rule guards).
-2. Register the tool in the appropriate file under `src/tools/` (`library.ts`, `lists.ts`, `categories.ts`, `items.ts`, `item-flags.ts`, or `batch.ts`), with a `zod` input schema and a clear `description` — this is what the calling agent sees, so make it specific about units, side effects, and any business rules (e.g. "worn and consumable are mutually exclusive").
-3. If the tool returns data, format it through `src/formatting/responses.ts` helpers (`formatItem`, `formatCategory`, `formatListDetail`, etc.) rather than returning raw internal types — keeps output units (grams, not milligrams) and shapes consistent across tools.
-4. Add a case to `tests/unit/tools/tools.test.ts` that calls the tool through the real MCP protocol (not just the mutation function) and asserts on the result.
-5. Add a row to the tool reference table in `README.md`.
+1. If the operation doesn't exist yet in the SDK, add it to [`lighterpack-sdk`](https://github.com/paladini/lighterpack-sdk) first (a new/extended method on the relevant `lp.*` namespace class, with its own unit test there) and publish/bump the dependency here — this repo should never reimplement business logic that belongs in the SDK.
+2. Register the tool in the appropriate file under `src/tools/` (`library.ts`, `lists.ts`, `categories.ts`, `items.ts`, `item-flags.ts`, or `batch.ts`), with a `zod` input schema and a clear `description` — this is what the calling agent sees, so make it specific about units, side effects, and any business rules (e.g. "worn and consumable are mutually exclusive"). The handler should just call the SDK method and return its result via `runTool` — see any existing tool for the pattern.
+3. Add a case to `tests/unit/tools/tools.test.ts` that calls the tool through the real MCP protocol (not just the SDK method directly) and asserts on the result.
+4. Add a row to the tool reference table in `README.md`.
 
-**`mutations.ts` is the highest-value review surface in this codebase.** It's an independent reimplementation of the business rules in LighterPack's own [`client/dataTypes.js`](https://github.com/galenmaly/lighterpack/blob/main/client/dataTypes.js) (worn/consumable exclusivity, star range, id sequencing, shared-item semantics, last-category/last-list guards). A subtle divergence there won't fail loudly — it'll silently write data LighterPack's own UI didn't expect. If you're touching it, cross-check against the upstream source and lean on the existing test coverage as a spec.
+**Business-rule changes belong in `lighterpack-sdk`, not here.** Its `mutations.ts` is an independent reimplementation of the rules in LighterPack's own [`client/dataTypes.js`](https://github.com/galenmaly/lighterpack/blob/main/client/dataTypes.js) (worn/consumable exclusivity, star range, id sequencing, shared-item semantics, last-category/last-list guards). A subtle divergence there won't fail loudly — it'll silently write data LighterPack's own UI didn't expect.
 
 ## Code style
 

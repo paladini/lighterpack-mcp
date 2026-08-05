@@ -1,11 +1,10 @@
+import type { LighterPackClient } from '@paladini/lighterpack';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { setCurrencySymbol, setItemUnit, setTotalUnit } from '../lighterpack/mutations.js';
-import type { SyncEngine } from '../lighterpack/sync-engine.js';
 import { runTool } from '../formatting/responses.js';
 import { weightUnitSchema } from './schemas.js';
 
-export function registerLibraryTools(server: McpServer, engine: SyncEngine): void {
+export function registerLibraryTools(server: McpServer, lp: LighterPackClient): void {
   server.registerTool(
     'get_account_info',
     {
@@ -13,17 +12,7 @@ export function registerLibraryTools(server: McpServer, engine: SyncEngine): voi
       description: 'Returns the signed-in username and a summary of the whole library: how many lists, categories, and items exist, plus library-wide settings (units, currency symbol).',
       inputSchema: {},
     },
-    async () =>
-      runTool(async () =>
-        engine.read((lib) => ({
-          listCount: lib.lists.length,
-          categoryCount: lib.categories.length,
-          itemCount: lib.items.length,
-          totalUnit: lib.totalUnit,
-          itemUnit: lib.itemUnit,
-          currencySymbol: lib.currencySymbol,
-        })),
-      ),
+    async () => runTool(async () => lp.account.get()),
   );
 
   server.registerTool(
@@ -35,7 +24,7 @@ export function registerLibraryTools(server: McpServer, engine: SyncEngine): voi
     },
     async () =>
       runTool(async () => {
-        await engine.refresh();
+        await lp.account.refresh();
         return { message: 'Library refreshed.' };
       }),
   );
@@ -49,7 +38,7 @@ export function registerLibraryTools(server: McpServer, engine: SyncEngine): voi
     },
     async ({ unit }) =>
       runTool(async () => {
-        await engine.mutate((lib) => setTotalUnit(lib, unit));
+        await lp.account.setTotalUnit(unit);
         return { message: `Total display unit set to ${unit}.` };
       }),
   );
@@ -63,7 +52,7 @@ export function registerLibraryTools(server: McpServer, engine: SyncEngine): voi
     },
     async ({ unit }) =>
       runTool(async () => {
-        await engine.mutate((lib) => setItemUnit(lib, unit));
+        await lp.account.setItemUnit(unit);
         return { message: `Default item unit set to ${unit}.` };
       }),
   );
@@ -77,7 +66,7 @@ export function registerLibraryTools(server: McpServer, engine: SyncEngine): voi
     },
     async ({ symbol }) =>
       runTool(async () => {
-        await engine.mutate((lib) => setCurrencySymbol(lib, symbol));
+        await lp.account.setCurrencySymbol(symbol);
         return { message: `Currency symbol set to "${symbol}".` };
       }),
   );

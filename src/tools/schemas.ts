@@ -1,5 +1,5 @@
+import { WEIGHT_UNITS } from '@paladini/lighterpack';
 import { z } from 'zod';
-import { WEIGHT_UNITS } from '../lighterpack/weight.js';
 
 export const weightUnitSchema = z.enum(WEIGHT_UNITS);
 

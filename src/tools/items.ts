@@ -1,17 +1,8 @@
 import { readFile } from 'node:fs/promises';
+import { ValidationError, type LighterPackClient } from '@paladini/lighterpack';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { formatItem, runTool } from '../formatting/responses.js';
-import {
-  addItemToCategory,
-  deleteItem,
-  forkItem,
-  removeItemFromCategory,
-  updateItem,
-} from '../lighterpack/mutations.js';
-import type { SyncEngine } from '../lighterpack/sync-engine.js';
-import { ValidationError } from '../lighterpack/errors.js';
-import { weightToMg } from '../lighterpack/weight.js';
+import { runTool } from '../formatting/responses.js';
 import { starSchema, weightUnitSchema } from './schemas.js';
 
 const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
@@ -21,7 +12,7 @@ const IMAGE_MIME_BY_EXTENSION: Record<string, string> = {
   webp: 'image/webp',
 };
 
-export function registerItemTools(server: McpServer, engine: SyncEngine): void {
+export function registerItemTools(server: McpServer, lp: LighterPackClient): void {
   server.registerTool(
     'add_item_to_category',
     {
@@ -45,22 +36,19 @@ export function registerItemTools(server: McpServer, engine: SyncEngine): void {
     },
     async ({ categoryId, existingItemId, name, description, weight, weightUnit, price, url, imageUrl, qty, worn, consumable, star }) =>
       runTool(async () =>
-        engine.mutate((lib) => {
-          const { item, categoryItem } = addItemToCategory(lib, categoryId, {
-            existingItemId,
-            name,
-            description,
-            weightMg: weight !== undefined ? weightToMg(weight, weightUnit) : undefined,
-            authorUnit: weightUnit,
-            price,
-            url,
-            imageUrl,
-            qty,
-            worn,
-            consumable,
-            star,
-          });
-          return formatItem(item, categoryItem);
+        lp.items.add(categoryId, {
+          existingItemId,
+          name,
+          description,
+          weight,
+          weightUnit,
+          price,
+          url,
+          imageUrl,
+          qty,
+          worn,
+          consumable,
+          star,
         }),
       ),
   );
@@ -82,23 +70,7 @@ export function registerItemTools(server: McpServer, engine: SyncEngine): void {
       },
     },
     async ({ itemId, name, description, price, weight, weightUnit, url, imageUrl }) =>
-      runTool(async () => {
-        if (weight !== undefined && weightUnit === undefined) {
-          throw new ValidationError('weightUnit is required when weight is provided.');
-        }
-        return engine.mutate((lib) => {
-          const item = updateItem(lib, itemId, {
-            name,
-            description,
-            price,
-            weightMg: weight !== undefined ? weightToMg(weight, weightUnit!) : undefined,
-            authorUnit: weightUnit,
-            url,
-            imageUrl,
-          });
-          return formatItem(item);
-        });
-      }),
+      runTool(async () => lp.items.update(itemId, { name, description, price, weight, weightUnit, url, imageUrl })),
   );
 
   server.registerTool(
@@ -110,7 +82,7 @@ export function registerItemTools(server: McpServer, engine: SyncEngine): void {
     },
     async ({ categoryId, itemId }) =>
       runTool(async () => {
-        await engine.mutate((lib) => removeItemFromCategory(lib, categoryId, itemId));
+        await lp.items.removeFromCategory(categoryId, itemId);
         return { message: `Item ${itemId} removed from category ${categoryId}.` };
       }),
   );
@@ -124,7 +96,7 @@ export function registerItemTools(server: McpServer, engine: SyncEngine): void {
     },
     async ({ itemId }) =>
       runTool(async () => {
-        await engine.mutate((lib) => deleteItem(lib, itemId));
+        await lp.items.delete(itemId);
         return { message: `Item ${itemId} deleted.` };
       }),
   );
@@ -136,7 +108,7 @@ export function registerItemTools(server: McpServer, engine: SyncEngine): void {
       description: 'Detaches a shared item into an independent copy for one specific list, so future edits to the original no longer affect this list\'s copy.',
       inputSchema: { itemId: z.number().int(), listId: z.number().int() },
     },
-    async ({ itemId, listId }) => runTool(async () => engine.mutate((lib) => formatItem(forkItem(lib, itemId, listId)))),
+    async ({ itemId, listId }) => runTool(async () => lp.items.fork(itemId, listId)),
   );
 
   server.registerTool(
@@ -146,7 +118,7 @@ export function registerItemTools(server: McpServer, engine: SyncEngine): void {
       description: 'Points an item at an externally-hosted image URL (no upload involved). Use upload_item_image instead to upload a local/binary image.',
       inputSchema: { itemId: z.number().int(), imageUrl: z.string().url() },
     },
-    async ({ itemId, imageUrl }) => runTool(async () => engine.mutate((lib) => formatItem(updateItem(lib, itemId, { imageUrl })))),
+    async ({ itemId, imageUrl }) => runTool(async () => lp.items.setImageUrl(itemId, imageUrl)),
   );
 
   server.registerTool(
@@ -185,8 +157,7 @@ export function registerItemTools(server: McpServer, engine: SyncEngine): void {
           filename = `item-${itemId}.${resolvedMimeType.split('/')[1]}`;
         }
 
-        const imageUrl = await engine.uploadImage({ buffer, filename, mimeType: resolvedMimeType });
-        return engine.mutate((lib) => formatItem(updateItem(lib, itemId, { imageUrl })));
+        return lp.items.uploadImage(itemId, { buffer, filename, mimeType: resolvedMimeType });
       }),
   );
 }

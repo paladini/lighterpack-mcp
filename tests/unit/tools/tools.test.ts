@@ -1,44 +1,98 @@
+import { LighterPackClient, type Library } from '@paladini/lighterpack';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ApiError } from '../../../src/lighterpack/errors.js';
-import { createEmptyLibrary } from '../../../src/lighterpack/mutations.js';
-import { SyncEngine, type LighterPackClientPort } from '../../../src/lighterpack/sync-engine.js';
-import type { Library } from '../../../src/lighterpack/types.js';
 import { registerAllTools } from '../../../src/tools/index.js';
 
-/** A minimal stand-in for the real LighterPack server: same sync_token contract, in-memory. */
-class FakeLighterPackBackend implements LighterPackClientPort {
-  private library: Library;
-  private syncToken = 0;
-  private shareSlugCounter = 0;
+/** The exact shape LighterPack's own createEmptyLibrary() produces for a fresh account: 1 list, 1 category, 1 item. */
+function createEmptyLibrary(): Library {
+  return {
+    version: '0.4',
+    totalUnit: 'oz',
+    itemUnit: 'oz',
+    defaultListId: 1,
+    sequence: 3,
+    showSidebar: true,
+    preferences: { sharedItemBubble: true, wornQtyHint: true, density: 'comfortable' },
+    currencySymbol: '$',
+    items: [{ id: 3, name: '', description: '', weight: 0, authorUnit: 'oz', price: 0, image: '', imageUrl: '', url: '' }],
+    categories: [{ id: 2, name: '', categoryItems: [{ itemId: 3, qty: 1, worn: 0, consumable: false, star: 0 }] }],
+    lists: [
+      {
+        id: 1,
+        name: '',
+        description: '',
+        externalId: '',
+        categoryIds: [2],
+        optionalFields: { images: false, price: false, worn: true, consumable: true, listDescription: false, packWeight: false },
+      },
+    ],
+  };
+}
 
-  constructor(initialLibrary: Library) {
-    this.library = initialLibrary;
+/**
+ * A minimal fake LighterPack server, wired in as `fetchImpl` on the real SDK client. This
+ * exercises the entire real client stack (auth cookie, sync_token contract, every API namespace)
+ * — only the actual network hop is faked. Mirrors the harness lighterpack-sdk's own test suite
+ * uses (tests/unit/sdk.test.ts).
+ */
+function createFakeServer(username = 'tester', password = 'hunter2') {
+  let library: Library = createEmptyLibrary();
+  let syncToken = 0;
+  let sessionCounter = 0;
+  let shareSlugCounter = 0;
+  const sessions = new Set<string>();
+
+  function json(body: unknown, init: { status?: number; setCookie?: string } = {}): Response {
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    if (init.setCookie) headers.set('Set-Cookie', init.setCookie);
+    return new Response(JSON.stringify(body), { status: init.status ?? 200, headers });
   }
 
-  async signIn() {
-    return { username: 'tester', library: JSON.stringify(this.library), syncToken: this.syncToken };
-  }
+  const fetchImpl: typeof fetch = async (input, init) => {
+    const path = new URL(String(input)).pathname;
+    const rawBody = init?.body;
+    const isJsonBody = typeof rawBody === 'string';
+    const body = isJsonBody ? (JSON.parse(rawBody as string) as Record<string, unknown>) : null;
+    const cookieHeader = new Headers(init?.headers as Record<string, string> | undefined).get('Cookie');
+    const sessionToken = cookieHeader?.replace(/^lp=/, '');
+    const authed = (sessionToken && sessions.has(sessionToken)) ?? false;
 
-  async saveLibrary(input: { syncToken: number; data: string }) {
-    if (input.syncToken !== this.syncToken) {
-      throw new ApiError('Your list is out of date - please refresh your browser.', 400);
+    if (path === '/signin' || path === '/register') {
+      if (body?.username !== username || body?.password !== password) {
+        return json({ message: 'Invalid username and/or password.' }, { status: 404 });
+      }
+      const token = `session-${(sessionCounter += 1)}`;
+      sessions.add(token);
+      return json({ username, library: JSON.stringify(library), sync_token: syncToken }, { setCookie: `lp=${token}; Path=/` });
     }
-    this.library = JSON.parse(input.data) as Library;
-    this.syncToken += 1;
-    return { syncToken: this.syncToken };
-  }
 
-  async uploadImage() {
-    return { imageUrl: '/userimages/fake.webp' };
-  }
+    if (path === '/saveLibrary') {
+      if (!authed) return json({ message: 'Please log in.' }, { status: 401 });
+      if (body?.sync_token !== syncToken) {
+        return json({ message: 'Your list is out of date - please refresh your browser.' }, { status: 400 });
+      }
+      library = JSON.parse(body.data as string) as Library;
+      syncToken += 1;
+      return json({ message: 'success', sync_token: syncToken });
+    }
 
-  async generateExternalId() {
-    this.shareSlugCounter += 1;
-    return { externalId: `slug${this.shareSlugCounter}` };
-  }
+    if (path === '/externalId') {
+      if (!authed) return json({ message: 'Please log in.' }, { status: 401 });
+      shareSlugCounter += 1;
+      return json({ externalId: `slug${shareSlugCounter}` });
+    }
+
+    if (path === '/imageUpload') {
+      if (!authed) return json({ message: 'Please log in.' }, { status: 401 });
+      return json({ imageUrl: '/userimages/fake.webp' });
+    }
+
+    return json({ message: 'not found' }, { status: 404 });
+  };
+
+  return { fetchImpl };
 }
 
 interface ToolTextResult {
@@ -57,10 +111,10 @@ describe('MCP tools (end-to-end over the real protocol)', () => {
   let server: McpServer;
 
   beforeEach(async () => {
-    const backend = new FakeLighterPackBackend(createEmptyLibrary());
-    const engine = new SyncEngine({ client: backend, username: 'tester', password: 'hunter2' });
+    const { fetchImpl } = createFakeServer();
+    const lp = new LighterPackClient({ username: 'tester', password: 'hunter2', fetchImpl });
     server = new McpServer({ name: 'lighterpack-mcp-test', version: '0.0.0' });
-    registerAllTools(server, engine);
+    registerAllTools(server, lp);
 
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     client = new Client({ name: 'test-client', version: '0.0.0' });
