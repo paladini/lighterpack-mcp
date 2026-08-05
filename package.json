@@ -1,0 +1,62 @@
+{
+  "name": "lighterpack-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for managing LighterPack packing lists — gear, weights, categories, and more.",
+  "type": "module",
+  "license": "MIT",
+  "author": "",
+  "homepage": "https://github.com/paladini/lighterpack-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paladini/lighterpack-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/paladini/lighterpack-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "lighterpack",
+    "packing-list",
+    "gear-list",
+    "backpacking",
+    "ultralight",
+    "claude",
+    "ai-agent"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "lighterpack-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsx src/index.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run tests/unit",
+    "test:watch": "vitest",
+    "test:integration": "vitest run tests/integration",
+    "verify-live-login": "tsx scripts/verify-live-login.ts",
+    "inspector": "npx @modelcontextprotocol/inspector node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.18.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.19.1",
+    "vitest": "^3.0.4"
+  }
+}

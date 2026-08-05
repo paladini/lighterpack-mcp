@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a new tool or a change to an existing one
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do that isn't currently possible?
+      description: What LighterPack capability or workflow is missing a tool?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed tool(s)
+      description: Suggested name(s), inputs, and what they'd return, if you have an idea.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds you're using today
+    validations:
+      required: false

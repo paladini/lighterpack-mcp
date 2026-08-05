@@ -1,0 +1,61 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+    validations:
+      required: true
+
+  - type: input
+    id: tool
+    attributes:
+      label: Which tool call triggered this?
+      description: e.g. `add_item_to_category`
+    validations:
+      required: false
+
+  - type: textarea
+    id: arguments
+    attributes:
+      label: Tool arguments (redact anything sensitive)
+      render: json
+    validations:
+      required: false
+
+  - type: textarea
+    id: response
+    attributes:
+      label: Error message / tool response
+      render: text
+    validations:
+      required: false
+
+  - type: dropdown
+    id: instance
+    attributes:
+      label: LighterPack instance
+      options:
+        - lighterpack.com
+        - Self-hosted (LIGHTERPACK_BASE_URL)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: lighterpack-mcp version
+      description: From `npm ls lighterpack-mcp` or your MCP client config.
+    validations:
+      required: false
+
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: Output of `node --version`.
+    validations:
+      required: false
