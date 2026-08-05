@@ -1,6 +1,6 @@
 {
-  "name": "lighterpack-mcp",
-  "version": "0.1.0",
+  "name": "@paladini/lighterpack-mcp",
+  "version": "0.2.0",
   "description": "MCP server for managing LighterPack packing lists — gear, weights, categories, and more.",
   "type": "module",
   "license": "MIT",
@@ -34,6 +34,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsx src/index.ts",
@@ -48,6 +51,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.13.0",
+    "@paladini/lighterpack": "^0.1.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
