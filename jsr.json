@@ -1,6 +1,7 @@
 {
   "name": "@paladini/lighterpack-mcp",
   "version": "0.2.0",
+  "description": "MCP server for managing LighterPack packing lists — gear, weights, categories, and more.",
   "license": "MIT",
   "exports": {
     ".": "./src/index.ts"

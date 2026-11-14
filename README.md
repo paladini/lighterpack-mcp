@@ -1,7 +1,7 @@
 # lighterpack-mcp
 
 [![CI](https://github.com/paladini/lighterpack-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/paladini/lighterpack-mcp/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/%40paladini%2Flighterpack-mcp.svg)](https://www.npmjs.com/package/@paladini/lighterpack-mcp)
+[![npm](https://img.shields.io/npm/v/lighterpack-mcp.svg)](https://www.npmjs.com/package/lighterpack-mcp)
 [![JSR](https://jsr.io/badges/@paladini/lighterpack-mcp)](https://jsr.io/@paladini/lighterpack-mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Node >=20](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](package.json)
@@ -21,13 +21,13 @@ Requires Node.js ≥20 and a [LighterPack](https://lighterpack.com) account.
 **npm / npx:**
 
 ```bash
-npx @paladini/lighterpack-mcp
+npx lighterpack-mcp
 ```
 
-**JSR** (Deno, Bun, or Node via `jsr:`):
+**JSR** (Deno):
 
 ```bash
-npx jsr run @paladini/lighterpack-mcp
+deno run -A jsr:@paladini/lighterpack-mcp
 ```
 
 Add it to your MCP client's config (example for Claude Desktop, `claude_desktop_config.json`):
@@ -37,7 +37,7 @@ Add it to your MCP client's config (example for Claude Desktop, `claude_desktop_
   "mcpServers": {
     "lighterpack": {
       "command": "npx",
-      "args": ["-y", "@paladini/lighterpack-mcp"],
+      "args": ["-y", "lighterpack-mcp"],
       "env": {
         "LIGHTERPACK_USERNAME": "your-username",
         "LIGHTERPACK_PASSWORD": "your-password"
